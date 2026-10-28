@@ -1,0 +1,118 @@
+# ==========================================
+# DEPENDENCIES
+# ==========================================
+# Node modules for root, server, and client
+node_modules/
+jspm_packages/
+
+# ==========================================
+# ENVIRONMENT & SECRETS
+# ==========================================
+# Local environment variables containing secrets, DB URIs, and API keys
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ==========================================
+# BUILDS & DISTRIBUTIONS
+# ==========================================
+# React client build outputs
+/client/build/
+/client/dist/
+
+# Server-side distribution/bundle folders (if using TypeScript or bundlers)
+/server/dist/
+/server/build/
+
+# General build artifacts
+dist/
+build/
+
+# ==========================================
+# LOGS & DEBUGGING
+# ==========================================
+# NPM, Yarn, and pnpm log files
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Diagnostic reports (see https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.nyc_output
+
+# ==========================================
+# TESTING & CACHES
+# ==========================================
+# Jest and Cypress testing artifacts
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+*.tsbuildinfo
+.npm
+.cache
+.parcel-cache
+.eslintcache
+
+# Cypress artifacts (if using Cypress for E2E)
+/client/cypress/videos/
+/client/cypress/screenshots/
+
+# ==========================================
+# LOCAL DATABASES & STORAGE
+# ==========================================
+# Local MongoDB instance files (if running in-memory or locally via Docker/binary)
+data/
+db/
+*.sqlite
+*.sqlite3
+
+# Uploaded user files / media storage (production should use S3/Cloudinary)
+/server/uploads/
+/server/public/uploads/
+
+# ==========================================
+# OS & IDE SPECIFIC FILES
+# ==========================================
+# macOS Finder metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows thumbnails and system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDE and Editor configurations
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
