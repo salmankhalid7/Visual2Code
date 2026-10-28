@@ -20,4 +20,5 @@ export const env = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   databaseUrl: process.env.DATABASE_URL,
+  redisUrl: process.env.REDIS_URL,
 };

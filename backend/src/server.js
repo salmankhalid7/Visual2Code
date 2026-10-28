@@ -1,6 +1,8 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
+import { connection } from "./config/redis.js";
+import { generationQueue } from "./config/queue.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -24,6 +26,13 @@ const shutdown = async (signal, error) => {
     await prisma.$disconnect();
   } catch (disconnectError) {
     console.error("Error disconnecting from database:", disconnectError);
+  }
+
+  try {
+    await generationQueue.close();
+    await connection.quit();
+  } catch (disconnectError) {
+    console.error("Error disconnecting from Redis:", disconnectError);
   }
 
   if (!server) {
