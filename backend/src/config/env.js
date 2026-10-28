@@ -19,4 +19,5 @@ export const env = {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
+  databaseUrl: process.env.DATABASE_URL,
 };

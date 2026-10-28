@@ -1,12 +1,13 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
+import { prisma } from "./config/prisma.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 let server;
 let shuttingDown = false;
 
-const shutdown = (signal, error) => {
+const shutdown = async (signal, error) => {
   if (shuttingDown) return;
   shuttingDown = true;
 
@@ -18,6 +19,12 @@ const shutdown = (signal, error) => {
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
   forceShutdownTimer.unref();
+
+  try {
+    await prisma.$disconnect();
+  } catch (disconnectError) {
+    console.error("Error disconnecting from database:", disconnectError);
+  }
 
   if (!server) {
     process.exit(error ? 1 : 0);
