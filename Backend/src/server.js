@@ -1,67 +1,94 @@
-// Entry point: loads .env into process.env, then starts the HTTP server.
-// Must stay the first import so env vars exist before app.js is evaluated.
 import "dotenv/config";
 import app from "./app.js";
+import { env, assertValidEnv } from "./env.js";
 import { prisma } from "./prisma.js";
+import { logger } from "./lib/logger.js";
+import { closeRedis, connectRedis } from "./redis/connection.js";
+import { closeGenerationQueue, getGenerationQueue } from "./queues/generationQueue.js";
+import { withTimeout } from "./lib/async.js";
 
-// Falls back to 3000 when PORT is missing from .env
-const PORT = process.env.PORT || 3000;
-
-// Upper bound on graceful shutdown; open keep-alive sockets can otherwise
-// delay `server.close()` indefinitely.
-const SHUTDOWN_TIMEOUT_MS = 10_000;
-
+let server;
 let shuttingDown = false;
 
-const startServer = async () => {
-  // Prisma connects lazily, so without this the first failed query would
-  // surface as a 500 instead of preventing a half-dead server from binding.
-  // The probe matters: the Neon adapter only builds a lazy pool on `$connect()`,
-  // so `SELECT 1` is what actually proves the database is reachable.
+async function startServer() {
   try {
+    assertValidEnv();
     await prisma.$connect();
     await prisma.$queryRaw`SELECT 1`;
-    console.log("Database connection established");
+    await prisma.generationJob.count();
+    logger.info("Database connection established");
+    await connectRedis();
+    await withTimeout(
+      getGenerationQueue().waitUntilReady(),
+      env.redisConnectTimeoutMs,
+      "Generation queue startup timed out",
+    );
   } catch (error) {
-    console.error(`Failed to connect to the database: ${error.message}`);
+    logger.error("Failed to initialize API dependencies", { error });
+    await closeGenerationQueue().catch((closeError) => {
+      logger.error("Failed to close queue after startup error", { error: closeError });
+    });
+    await closeRedis().catch((closeError) => {
+      logger.error("Failed to close Redis after startup error", { error: closeError });
+    });
+    await prisma.$disconnect().catch((disconnectError) => {
+      logger.error("Failed to disconnect Prisma after startup error", { error: disconnectError });
+    });
     process.exit(1);
   }
 
-  const server = app.listen(PORT, () => {
-    console.log(`Server is running on port http://localhost:${PORT}`);
+  server = app.listen(env.port, () => {
+    logger.info("HTTP server listening", { port: env.port });
   });
-
-  // Bind errors (EADDRINUSE, EACCES) arrive as events, not via the callback
   server.on("error", (error) => {
-    console.error(`Error starting server: ${error.message}`);
-    process.exit(1);
+    logger.error("HTTP server failed", { error });
+    shutdown("HTTP server error").finally(() => process.exit(1));
   });
+}
 
-  const shutdown = (signal) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
+export async function shutdown(signal = "shutdown") {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info("Shutdown requested", { signal });
 
-    console.log(`${signal} received: closing server`);
+  const timer = setTimeout(() => {
+    logger.error("Shutdown timed out");
+    process.exit(1);
+  }, env.shutdownTimeoutMs);
+  timer.unref();
 
-    // Guarantees the process dies even if sockets stay open
-    setTimeout(() => {
-      console.error("Shutdown timed out, forcing exit");
-      process.exit(1);
-    }, SHUTDOWN_TIMEOUT_MS).unref();
-
-    server.close(async () => {
-      try {
-        await prisma.$disconnect();
-        console.log("Database connection closed");
-      } catch (error) {
-        console.error(`Error closing database connection: ${error.message}`);
-      }
-      process.exit(0);
-    });
+  const errors = [];
+  const cleanup = async (label, operation) => {
+    try {
+      await operation();
+    } catch (error) {
+      errors.push(error);
+      logger.error(`Failed to ${label}`, { error });
+    }
   };
 
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-};
+  if (server?.listening) {
+    await cleanup("close HTTP server", () => new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    }));
+  }
+  await cleanup("close generation queue", closeGenerationQueue);
+  await cleanup("close Redis", closeRedis);
+  await cleanup("disconnect Prisma", () => prisma.$disconnect());
 
-startServer();
+  if (errors.length > 0) {
+    logger.error("API shutdown completed with errors", { errorCount: errors.length });
+    process.exitCode = 1;
+  } else {
+    logger.info("API shutdown complete");
+  }
+  clearTimeout(timer);
+}
+
+process.once("SIGINT", () => shutdown("SIGINT").finally(() => process.exit()));
+process.once("SIGTERM", () => shutdown("SIGTERM").finally(() => process.exit()));
+
+startServer().catch((error) => {
+  logger.error("API startup failed", { error });
+  process.exitCode = 1;
+});

@@ -1,10 +1,10 @@
 // prisma/schema.prisma
 generator client {
-  provider            = "prisma-client"
-  output              = "../src/generated/prisma"
-  moduleFormat        = "esm"
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
   generatedFileExtension = "ts"
-  importFileExtension = "ts"
+  importFileExtension    = "ts"
 }
 
 datasource db {
@@ -12,8 +12,39 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id             Int             @id @default(autoincrement())
+  email          String          @unique
+  name           String?
+  createdAt      DateTime        @default(now())
+  generationJobs GenerationJob[]
+}
+
+enum GenerationJobStatus {
+  QUEUED
+  ACTIVE
+  RETRYING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model GenerationJob {
+  id             String              @id @db.Uuid
+  userId         Int?
+  user           User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  idempotencyKey String?             @unique
+  type           String              @default("generation")
+  status         GenerationJobStatus @default(QUEUED)
+  progress       Int                 @default(0)
+  priority       Int                 @default(10)
+  delayMs        Int                 @default(0)
+  input          Json                @db.JsonB
+  result         Json?               @db.JsonB
+  error          String?             @db.Text
+  createdAt      DateTime            @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
